@@ -59,6 +59,9 @@ module Servant.Record (
     --
     recordLink,
     -- * Details
+    -- ** Api
+    HasRecordApi (..),
+    HasRecordApiK1 (..),
     -- ** Server
     HasServerRecordApi (..),
     HasServerRecordApiK1 (..),
@@ -74,54 +77,64 @@ import Servant
 import Servant.Client.Core
 
 -------------------------------------------------------------------------------
+-- RecordApi
+-------------------------------------------------------------------------------
+
+class HasRecordApi (m :: Type -> Type) (code :: Type -> Type) where
+    type RecordApi code :: Type
+
+instance HasRecordApi m f => HasRecordApi m (M1 i c f) where
+    type RecordApi (M1 i c f) = RecordApi f
+
+instance (HasRecordApi m f, HasRecordApi m g) => HasRecordApi m (f :*: g) where
+    type RecordApi (f :*: g) = RecordApi f :<|> RecordApi g
+
+instance HasRecordApiK1 m c =>  HasRecordApi m (K1 i c) where
+    type RecordApi (K1 i c) = RecordApiK1 c
+
+class HasRecordApiK1 (m :: Type -> Type) (c :: Type) where
+    type RecordApiK1 c :: Type
+
+instance m ~ m' => HasRecordApiK1 m (f m' api) where
+    type RecordApiK1 (f m' api) = api
+
+-------------------------------------------------------------------------------
 -- Server
 -------------------------------------------------------------------------------
 
 -- | A newtype wrapping 'Server' implementation
 newtype Srv m api = Srv { unSrv :: ServerT api m }
 
-class HasServerRecordApi (m :: Type -> Type) (code :: Type -> Type) where
-    type ServerRecordApi code :: Type
-
+class HasRecordApi m code => HasServerRecordApi (m :: Type -> Type) (code :: Type -> Type) where
     recordServerCode
         :: (forall x. m x -> Handler x)
         -> code z
-        -> Server (ServerRecordApi code)
+        -> Server (RecordApi code)
 
 instance HasServerRecordApi m f => HasServerRecordApi m (M1 i c f) where
-    type ServerRecordApi (M1 i c f) = ServerRecordApi f
-
     recordServerCode nt (M1 rep) = recordServerCode nt rep
 
 instance (HasServerRecordApi m f, HasServerRecordApi m g) => HasServerRecordApi m (f :*: g) where
-    type ServerRecordApi (f :*: g) = ServerRecordApi f :<|> ServerRecordApi g
-
     recordServerCode nt (f :*: g) =
         recordServerCode nt f :<|> recordServerCode nt g
 
 instance HasServerRecordApiK1 m c =>  HasServerRecordApi m (K1 i c) where
-    type ServerRecordApi (K1 i c) = ServerRecordApiK1 c
-
     recordServerCode nt (K1 c) = recordServerCodeK1 nt c
 
-class HasServerRecordApiK1 (m :: Type -> Type) (c :: Type) where
-    type ServerRecordApiK1 c :: Type
-
+class HasRecordApiK1 m c => HasServerRecordApiK1 (m :: Type -> Type) (c :: Type) where
     recordServerCodeK1
         :: (forall x. m x -> Handler x)
         -> c
-        -> Server (ServerRecordApiK1 c)
+        -> Server (RecordApiK1 c)
 
 instance (HasServer api '[], m ~ m') => HasServerRecordApiK1 m (Srv m' api) where
-    type ServerRecordApiK1 (Srv m' api) = api
-
     recordServerCodeK1 nt (Srv s) = hoistServer (Proxy :: Proxy api) nt s
 
 -- | Get a proxy for an api from the record.
 recordApi
     :: (HasServerRecordApi m code, Generic (record (Srv m)), Rep (record (Srv m)) ~ code)
     => record (Srv m)
-    -> Proxy (ServerRecordApi code)
+    -> Proxy (RecordApi code)
 recordApi _ = Proxy
 
 -- | Get a server for an api from the record.
@@ -129,12 +142,12 @@ recordServer
     :: (HasServerRecordApi m code, Generic (record (Srv m)), Rep (record (Srv m)) ~ code)
     => (forall x. m x -> Handler x)
     -> record (Srv m)
-    -> Server (ServerRecordApi code)
+    -> Server (RecordApi code)
 recordServer nt r = recordServerCode nt (from r)
 
 -- | Convert record into WAI 'Application'.
 serveRecord
-    :: ( HasServer (ServerRecordApi code) '[]
+    :: ( HasServer (RecordApi code) '[]
        , HasServerRecordApi m code
        , Generic (record (Srv m)), Rep (record (Srv m)) ~ code
        )
@@ -152,40 +165,28 @@ serveRecord nt r = serve (recordApi r) (recordServer nt r)
 
 newtype Cli (m :: Type -> Type) (api :: Type) = Cli { unCli :: Client m api }
 
-class HasClientRecordApi (m :: Type -> Type) (code :: Type -> Type) where
-    type ClientRecordApi code :: Type
-
+class HasRecordApi m code => HasClientRecordApi (m :: Type -> Type) (code :: Type -> Type) where
     recordClientCode
         :: Proxy m
-        -> Client m (ClientRecordApi code)
+        -> Client m (RecordApi code)
         -> code z
 
 instance HasClientRecordApi m f => HasClientRecordApi m (M1 i c f) where
-    type ClientRecordApi (M1 i c f) = ClientRecordApi f
-
     recordClientCode m f = M1 (recordClientCode m f)
 
 instance (HasClientRecordApi m f, HasClientRecordApi m g) => HasClientRecordApi m (f :*: g) where
-    type ClientRecordApi (f :*: g) = ClientRecordApi f :<|> ClientRecordApi g
-
     recordClientCode m (f :<|> g) = recordClientCode m f :*: recordClientCode m g
 
 instance HasClientRecordApiK1 m c => HasClientRecordApi m (K1 i c) where
-    type ClientRecordApi (K1 i c) = ClientRecordApiK1 c
-
     recordClientCode m c = K1 (recordClientCodeK1 m c)
 
-class HasClientRecordApiK1 (m :: Type -> Type) (c :: Type) where
-    type ClientRecordApiK1 c :: Type
-
+class HasRecordApiK1 m c => HasClientRecordApiK1 (m :: Type -> Type) (c :: Type) where
     recordClientCodeK1
         :: Proxy m
-        -> Client m (ClientRecordApiK1 c)
+        -> Client m (RecordApiK1 c)
         -> c
 
 instance m ~ m' => HasClientRecordApiK1 m (Cli m' api) where
-    type ClientRecordApiK1 (Cli m' api) = api
-
     recordClientCodeK1 _ = Cli
 
 -- | Generate a record of client functions.
@@ -199,7 +200,7 @@ instance m ~ m' => HasClientRecordApiK1 m (Cli m' api) where
 -- @
 --
 recordClient
-    :: ( HasClientRecordApi m code, HasClient cli (ClientRecordApi code)
+    :: ( HasClientRecordApi m code, HasClient cli (RecordApi code)
        , Generic (record (Cli m)), code ~ Rep (record (Cli m))
        )
     => (forall x. cli x -> m x)
@@ -207,7 +208,7 @@ recordClient
 recordClient = hiddenForalls
   where
     hiddenForalls
-        :: forall code m cli record. (HasClientRecordApi m code, HasClient cli (ClientRecordApi code), Generic (record (Cli m)), code ~ Rep (record (Cli m)))
+        :: forall code m cli record. (HasClientRecordApi m code, HasClient cli (RecordApi code), Generic (record (Cli m)), code ~ Rep (record (Cli m)))
         => (forall x. cli x -> m x)
         -> record (Cli m)
     hiddenForalls nt
@@ -218,7 +219,7 @@ recordClient = hiddenForalls
       where
         cli = Proxy :: Proxy cli
         m   = Proxy :: Proxy m
-        api = Proxy :: Proxy (ClientRecordApi code)
+        api = Proxy :: Proxy (RecordApi code)
 
 -------------------------------------------------------------------------------
 -- Links
@@ -233,11 +234,11 @@ recordClient = hiddenForalls
 --
 recordLink
     :: forall record code m endpoint a.
-       ( HasServerRecordApi m code, HasLink endpoint
-       , Rep (record (Srv m)) ~ code, IsElem endpoint (ServerRecordApi code)
+       ( HasRecordApi m code, HasLink endpoint
+       , Rep (record (Srv m)) ~ code, IsElem endpoint (RecordApi code)
        )
     => (Link -> a)
     -> (record (Srv m) -> Srv m endpoint)
     -> MkLink endpoint a
 recordLink toA _ =
-    safeLink' toA (Proxy :: Proxy (ServerRecordApi code)) (Proxy :: Proxy endpoint)
+    safeLink' toA (Proxy :: Proxy (RecordApi code)) (Proxy :: Proxy endpoint)
