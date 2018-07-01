@@ -1,0 +1,61 @@
+cabal-version:  2.0
+name:           servant-record
+version:        0
+
+synopsis:       Servant API from a record
+description:
+  Servant API from a record.
+  .
+  * Transform record of handlers to an application
+  .
+  * or get a record of client function
+  .
+  * or use field accessors for safe links.
+
+category:       Web, Servant
+
+homepage:       https://github.com/phadej/servant-record#readme
+bug-reports:    https://github.com/phadej/servant-record/issues
+author:         Oleg Grenrus <oleg.grenrus@iki.fi>
+maintainer:     Oleg Grenrus <oleg.grenrus@iki.fi>
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+tested-with:    GHC==7.8.4, GHC==7.10.3, GHC==8.0.2, GHC==8.2.2, GHC==8.4.3
+
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/phadej/servant-record
+
+library
+  default-language: Haskell2010
+  hs-source-dirs:   src
+  ghc-options:      -Wall
+  build-depends:
+      base                  >=4.7  && <4.12
+    , servant              ^>=0.14 
+    , servant-server       ^>=0.14 
+    , servant-client-core  ^>=0.14 
+  exposed-modules:
+      Servant.Record
+
+test-suite example
+  default-language: Haskell2010
+  hs-source-dirs:   example
+  ghc-options:      -Wall
+
+  type:             exitcode-stdio-1.0
+  main-is:          Main.hs
+
+  build-depends:
+      base
+    , servant
+    , servant-record
+    , servant-server
+    , servant-client ^>=0.14 
+    , base-compat    >=0.10.1   && <0.11
+    , transformers   >=0.3      && <0.6
+    , warp           >=3.0.13.1 && <3.3
