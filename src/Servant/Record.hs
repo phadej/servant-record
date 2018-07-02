@@ -101,30 +101,31 @@ class HasRecordApiK1 (m :: Type -> Type) (c :: Type) where
 instance m ~ m' => HasRecordApiK1 m (f m' api) where
     type RecordApiK1 (f m' api) = api
 
--- | Get a proxy for an api from the record.
-recordApi
+-- | Get a proxy for an api from the record. Useful when you have
+-- @Record (Srv m)@ value.
+recordApi'
     :: forall (record :: (Type -> Type) -> Type) f m code.
        ( HasRecordApi m code
        , Generic (record (f m)), Rep (record (f m)) ~ code
        )
     => record (f m)
     -> Proxy (RecordApi code)
-recordApi _ = Proxy
+recordApi' _ = Proxy
 
--- | Specialized to ('ApiProxy' 'Proxy') version of 'recordApi'
+-- | Get a 'Proxy' of an API type.
 --
 -- @
 -- api :: RecordApi (Rep (Record (ApiProxy Proxy)))
 -- api = recordApi' (Proxy :: Proxy Record)
 -- @
-recordApi'
+recordApi
     :: forall (record :: (Type -> Type) -> Type) code.
        ( HasRecordApi Proxy code
        , Generic (record (ApiProxy Proxy)), Rep (record (ApiProxy Proxy)) ~ code
        )
     => Proxy record
     -> Proxy (RecordApi code)
-recordApi' _ = Proxy
+recordApi _ = Proxy
 
 -- | 'Proxy' has wrong kind.
 data ApiProxy (m :: * -> *) api = ApiProxy
@@ -181,7 +182,7 @@ serveRecord
     -> record (Srv m)
         -- ^ record of endpoint implementations
     -> Application
-serveRecord nt r = serve (recordApi r) (recordServer nt r)
+serveRecord nt r = serve (recordApi' r) (recordServer nt r)
 
 -------------------------------------------------------------------------------
 -- Client
