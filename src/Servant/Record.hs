@@ -44,11 +44,14 @@
 -- @
 --
 module Servant.Record (
+    -- * API
+    recordApi,
+    recordApi',
+    ApiProxy (..),
     -- * Server
     serveRecord,
     Srv (..),
     recordServer,
-    recordApi,
     -- * Client
     recordClient,
     Cli (..),
@@ -98,6 +101,34 @@ class HasRecordApiK1 (m :: Type -> Type) (c :: Type) where
 instance m ~ m' => HasRecordApiK1 m (f m' api) where
     type RecordApiK1 (f m' api) = api
 
+-- | Get a proxy for an api from the record.
+recordApi
+    :: forall (record :: (Type -> Type) -> Type) f m code.
+       ( HasRecordApi m code
+       , Generic (record (f m)), Rep (record (f m)) ~ code
+       )
+    => record (f m)
+    -> Proxy (RecordApi code)
+recordApi _ = Proxy
+
+-- | Specialized to ('ApiProxy' 'Proxy') version of 'recordApi'
+--
+-- @
+-- api :: RecordApi (Rep (Record (ApiProxy Proxy)))
+-- api = recordApi' (Proxy :: Proxy Record)
+-- @
+recordApi'
+    :: forall (record :: (Type -> Type) -> Type) code.
+       ( HasRecordApi Proxy code
+       , Generic (record (ApiProxy Proxy)), Rep (record (ApiProxy Proxy)) ~ code
+       )
+    => Proxy record
+    -> Proxy (RecordApi code)
+recordApi' _ = Proxy
+
+-- | 'Proxy' has wrong kind.
+data ApiProxy (m :: * -> *) api = ApiProxy
+
 -------------------------------------------------------------------------------
 -- Server
 -------------------------------------------------------------------------------
@@ -129,13 +160,6 @@ class HasRecordApiK1 m c => HasServerRecordApiK1 (m :: Type -> Type) (c :: Type)
 
 instance (HasServer api '[], m ~ m') => HasServerRecordApiK1 m (Srv m' api) where
     recordServerCodeK1 nt (Srv s) = hoistServer (Proxy :: Proxy api) nt s
-
--- | Get a proxy for an api from the record.
-recordApi
-    :: (HasServerRecordApi m code, Generic (record (Srv m)), Rep (record (Srv m)) ~ code)
-    => record (Srv m)
-    -> Proxy (RecordApi code)
-recordApi _ = Proxy
 
 -- | Get a server for an api from the record.
 recordServer
