@@ -258,12 +258,12 @@ recordClient = hiddenForalls
 -- @
 --
 recordLink
-    :: forall record code m endpoint a.
+    :: forall record code f m endpoint a.
        ( HasRecordApi m code, HasLink endpoint
-       , Rep (record (Srv m)) ~ code, IsElem endpoint (RecordApi code)
+       , Rep (record (f m)) ~ code, IsElem endpoint (RecordApi code)
        )
     => (Link -> a)
-    -> (record (Srv m) -> Srv m endpoint)
+    -> (record (f m) -> f m endpoint)
     -> MkLink endpoint a
 recordLink toA _ =
     safeLink' toA (Proxy :: Proxy (RecordApi code)) (Proxy :: Proxy endpoint)
